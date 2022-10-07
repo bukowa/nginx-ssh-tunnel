@@ -1,13 +1,17 @@
 #!/bin/bash
 set -e
 
+# docker image
 IMAGE_TAG=testsshtunnel
-SERVER=localhost
 
+# docker related stuff
 PROXY_NAME="just_a_proxy"
 CLIENT_NAME="just_a_client"
 NETWORK_NAME="just_a_proxy_client_network"
 VOLUME_NAME="just_a_proxy_client_volume"
+
+# container config
+SERVER=${PROXY_NAME}
 
 # build docker image
 docker build --tag=${IMAGE_TAG} .
@@ -41,15 +45,19 @@ docker volume create ${VOLUME_NAME}
 # create container proxy
 docker run --rm \
   --network=${IMAGE_TAG} \
-  --name=${PROXY_NAME} \
-  -e SERVER=${SERVER} \
+  -e SERVER=${PROXY_NAME} \
   --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
   -d \
+  --name=${PROXY_NAME} \
   ${IMAGE_TAG}
 
 # test with container client
 docker run --rm \
   --network=${IMAGE_TAG} \
+  --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
   --name=${CLIENT_NAME} \
   curlimages/curl \
-  curl -L ${PROXY_NAME} || echo "Test failed..."; exit 1
+  \
+  curl -L ${PROXY_NAME} \
+    --cacert /certs/live/${SERVER}/fullchain.pem \
+  || echo "Test failed..."; exit 1
