@@ -93,21 +93,24 @@ docker run --rm \
   --volume=${VOLUME_NAME}:/ssh_keys \
   -e PUBLIC_KEY_FILE=/ssh_keys/id_rsa.pub \
   -e USER_NAME=dev \
+  -p 5000 \
+  -e DOCKER_MODS=linuxserver/mods:openssh-server-ssh-tunnel \
   -d \
   --name=${SSH_SERVER_NAME} \
   linuxserver/openssh-server
 
-sleep 1
+sleep 2
 echo "Running ssh tunnel..."
-docker run --rm \
+docker run \
   --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/ssh_keys \
   --name=${SSH_TUNNEL_NAME} \
   ${OPENSSH_TAG} \
     ssh -o StrictHostKeyChecking=no \
-    -i /ssh_keys/id_rsa \
-    -p 2222 -R 5000:localhost:9000 dev@${SSH_SERVER_NAME}
+    -i /ssh_keys/id_rsa -p 2222 \
+    -R 5000:${DEST_NAME}:9000 dev@${SSH_SERVER_NAME}
 
+sleep infinity
 # test with container client
 docker run --rm \
   --network=${NETWORK_NAME} \
