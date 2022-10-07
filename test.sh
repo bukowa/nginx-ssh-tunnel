@@ -60,48 +60,53 @@ trap cleanup 0
 docker network create ${NETWORK_NAME}
 docker volume create ${VOLUME_NAME}
 
-# create container proxy
+echo "Creating proxy container..."
 docker run --rm \
   --network=${NETWORK_NAME} \
   -e SERVER=${PROXY_NAME} \
   -e TUNNEL_HOST=${SSH_TUNNEL_NAME} \
+  -e TUNNEL_PORT=5000 \
   --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
   -d \
   --name=${PROXY_NAME} \
   ${IMAGE_TAG}
 
-# create container destination
+echo "Creating destination container..."
 docker run --rm \
   --network=${NETWORK_NAME} \
   -d \
   --name=${DEST_NAME} \
   quay.io/k8start/http-headers:0.1.1 \
   \
-  --port=5055
+  --port=9000
 
-# generate ssh keys
+echo "Generating ssh keys..."
 docker run --rm \
   --volume=${VOLUME_NAME}:/ssh_keys \
   --name=${SSH_GEN_NAME} \
   ${OPENSSH_TAG} \
   ssh-keygen -q -N "" -f /ssh_keys/id_rsa
 
-# run ssh server
+echo "Running ssh server..."
 docker run --rm \
+  --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/ssh_keys \
   -e PUBLIC_KEY_FILE=/ssh_keys/id_rsa.pub \
-  -e USER_NAME=root \
+  -e USER_NAME=dev \
   -d \
-  --name=${SSH_SERVER_NAME}
+  --name=${SSH_SERVER_NAME} \
   linuxserver/openssh-server
 
-# run ssh tunnel
+sleep 1
+echo "Running ssh tunnel..."
 docker run --rm \
+  --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/ssh_keys \
-  -d \
   --name=${SSH_TUNNEL_NAME} \
   ${OPENSSH_TAG} \
-    sleep infinite
+    ssh -o StrictHostKeyChecking=no \
+    -i /ssh_keys/id_rsa \
+    -p 2222 -R 5000:localhost:9000 dev@${SSH_SERVER_NAME}
 
 # test with container client
 docker run --rm \
