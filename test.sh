@@ -112,7 +112,7 @@ docker run --rm \
   \
   --port=9000 &
 
-sleep 3
+sleep 5
 echo "Running ssh tunnel..."
 docker run --rm \
   --network=${NETWORK_NAME} \
@@ -123,6 +123,7 @@ docker run --rm \
     -i /ssh_keys/id_rsa -p 2222 \
     -R 0.0.0.0:5000:${DEST_NAME}:9000 dev@${SSH_SERVER_NAME} &
 
+sleep 5
 echo "Creating proxy container..."
 docker run --rm \
   --network=${NETWORK_NAME} \
@@ -133,7 +134,7 @@ docker run --rm \
   --name=${PROXY_NAME} \
   ${IMAGE_TAG} &
 
-sleep 3
+sleep 5
 echo "Running client waiting to be tunneled..."
 docker run --rm \
   --network=${NETWORK_NAME} \
