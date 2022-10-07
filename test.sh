@@ -22,7 +22,7 @@ SERVER=${PROXY_NAME}
 docker build --tag=${IMAGE_TAG} .
 docker build -t ${OPENSSH_TAG} -f - . <<EOF
 FROM alpine
-RUN apk add openssh
+RUN apk add openssh autossh
 EOF
 
 # if any of these exists - exit
@@ -93,7 +93,6 @@ docker run --rm \
   --volume=${VOLUME_NAME}:/ssh_keys \
   -e PUBLIC_KEY_FILE=/ssh_keys/id_rsa.pub \
   -e USER_NAME=dev \
-  -p 5000 \
   -e DOCKER_MODS=linuxserver/mods:openssh-server-ssh-tunnel \
   -d \
   --name=${SSH_SERVER_NAME} \
@@ -101,12 +100,12 @@ docker run --rm \
 
 sleep 2
 echo "Running ssh tunnel..."
-docker run \
+docker run --rm \
   --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/ssh_keys \
   --name=${SSH_TUNNEL_NAME} \
   ${OPENSSH_TAG} \
-    ssh -o StrictHostKeyChecking=no \
+    ssh -fN -o StrictHostKeyChecking=no \
     -i /ssh_keys/id_rsa -p 2222 \
     -R 5000:${DEST_NAME}:9000 dev@${SSH_SERVER_NAME}
 
