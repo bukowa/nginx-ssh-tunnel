@@ -18,6 +18,31 @@ VOLUME_NAME="just_a_proxy_client_volume"
 # container config
 SERVER=${PROXY_NAME}
 
+# pull all images
+docker pull linuxserver/openssh-server
+docker pull linuxserver/mods:openssh-server-ssh-tunnel
+docker pull quay.io/k8start/http-headers:0.1.1
+docker pull curlimages/curl
+#
+#Using default tag: latest
+#latest: Pulling from linuxserver/openssh-server
+#Digest: sha256:56df195fc1cf8db0aaf2108fc1d0f276843e70261c6fca598789fff2faddcce0
+#Status: Image is up to date for linuxserver/openssh-server:latest
+#docker.io/linuxserver/openssh-server:latest
+#openssh-server-ssh-tunnel: Pulling from linuxserver/mods
+#Digest: sha256:2890aea04dc9255c71ce533ba69f89302c0f739783f9ec0f3f2faf9adb30cf0c
+#Status: Image is up to date for linuxserver/mods:openssh-server-ssh-tunnel
+#docker.io/linuxserver/mods:openssh-server-ssh-tunnel
+#0.1.1: Pulling from k8start/http-headers
+#Digest: sha256:c453cf1dedd927dc6b94879f79661c2e436552ff8e7bffe7104ea1176c530fbb
+#Status: Image is up to date for quay.io/k8start/http-headers:0.1.1
+#quay.io/k8start/http-headers:0.1.1
+#Using default tag: latest
+#latest: Pulling from curlimages/curl
+#Digest: sha256:9fab1b73f45e06df9506d947616062d7e8319009257d3a05d970b0de80a41ec5
+#Status: Image is up to date for curlimages/curl:latest
+#docker.io/curlimages/curl:latest
+
 # build docker images
 docker build --tag=${IMAGE_TAG} .
 docker build -t ${OPENSSH_TAG} -f - . <<EOF
