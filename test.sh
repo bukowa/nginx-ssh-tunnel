@@ -28,6 +28,7 @@ echo "We can run...!"
 
 # remove all resources created in this script
 function cleanup() {
+  echo "Trapped... last exit code: $?"
   set +e
   echo "Cleaning up..."
   docker rm -f ${PROXY_NAME}
@@ -70,6 +71,7 @@ docker run --rm \
   --name=${CLIENT_NAME} \
   curlimages/curl \
   \
-  curl -L ${PROXY_NAME} \
-    --cacert /certs/live/${SERVER}/fullchain.pem \
-  || echo "Test failed..."; exit 1
+  curl -v -L ${PROXY_NAME} \
+    --cacert /certs/live/${SERVER}/fullchain.pem
+
+echo "Looks like it works!"
