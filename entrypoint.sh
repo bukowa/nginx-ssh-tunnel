@@ -16,6 +16,7 @@ ssl_certificate="/certs/live/$SERVER/fullchain.pem"
 ssl_certificate_key="/certs/live/$SERVER/privkey.pem"
 
 if ! [ -f "$ssl_certificate" ] || ! [ -f "$ssl_certificate_key" ]; then
+  echo "Certificates not found, generating dummy certs so nginx can boot up..."
   mkdir -p tmp-certs12345612345 ; cd tmp-certs12345612345
   mkdir -p $(dirname "$ssl_certificate")
   mkdir -p $(dirname "$ssl_certificate_key")
