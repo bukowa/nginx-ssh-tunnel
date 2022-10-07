@@ -63,10 +63,10 @@ docker volume create ${VOLUME_NAME}
 echo "Creating proxy container..."
 docker run --rm \
   --network=${NETWORK_NAME} \
+  --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
   -e SERVER=${PROXY_NAME} \
   -e TUNNEL_HOST=${SSH_TUNNEL_NAME} \
   -e TUNNEL_PORT=5000 \
-  --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
   -d \
   --name=${PROXY_NAME} \
   ${IMAGE_TAG}
@@ -74,8 +74,8 @@ docker run --rm \
 echo "Creating destination container..."
 docker run --rm \
   --network=${NETWORK_NAME} \
-  -d \
   --name=${DEST_NAME} \
+  -d \
   quay.io/k8start/http-headers:0.1.1 \
   \
   --port=9000
@@ -104,13 +104,13 @@ docker run --rm \
   --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/ssh_keys \
   --name=${SSH_TUNNEL_NAME} \
+  -d \
   ${OPENSSH_TAG} \
-    ssh -fN -o StrictHostKeyChecking=no \
+    autossh -M 0 -N -o StrictHostKeyChecking=no \
     -i /ssh_keys/id_rsa -p 2222 \
     -R 5000:${DEST_NAME}:9000 dev@${SSH_SERVER_NAME}
 
-sleep infinity
-# test with container client
+echo "Running client waiting to be tunneled..."
 docker run --rm \
   --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
