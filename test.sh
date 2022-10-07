@@ -1,12 +1,16 @@
 #!/bin/bash
 set -e
 
-# docker image
+# docker images
 IMAGE_TAG=testsshtunnel
+OPENSSH_TAG="openssh_sshtunnel"
 
 # docker related stuff
 PROXY_NAME="just_a_proxy"
 CLIENT_NAME="just_a_client"
+SSH_TUNNEL_NAME="just_a_ssh_tunnel"
+SSH_SERVER_NAME="just_a_ssh_server"
+SSH_GEN_NAME="just_a_ssh_gen_name"
 DEST_NAME="just_a_destination"
 NETWORK_NAME="just_a_proxy_client_network"
 VOLUME_NAME="just_a_proxy_client_volume"
@@ -14,14 +18,21 @@ VOLUME_NAME="just_a_proxy_client_volume"
 # container config
 SERVER=${PROXY_NAME}
 
-# build docker image
+# build docker images
 docker build --tag=${IMAGE_TAG} .
+docker build -t ${OPENSSH_TAG} -f - . <<EOF
+FROM alpine
+RUN apk add openssh
+EOF
 
 # if any of these exists - exit
 echo "Checking if we can run..."
 if docker inspect ${PROXY_NAME}; then echo "this is bad"; exit 1; fi
 if docker inspect ${CLIENT_NAME}; then echo "this is bad"; exit 1; fi
 if docker inspect ${DEST_NAME}; then echo "this is bad"; exit 1; fi
+if docker inspect ${SSH_TUNNEL_NAME}; then echo "this is bad"; exit 1; fi
+if docker inspect ${SSH_SERVER_NAME}; then echo "this is bad"; exit 1; fi
+if docker inspect ${SSH_GEN_NAME}; then echo "this is bad"; exit 1; fi
 if docker network inspect ${NETWORK_NAME}; then echo "this is bad"; exit 1; fi
 if docker volume inspect ${VOLUME_NAME}; then echo "this is bad"; exit 1; fi
 echo "We can run...!"
@@ -34,6 +45,9 @@ function cleanup() {
   docker rm -f ${PROXY_NAME}
   docker rm -f ${CLIENT_NAME}
   docker rm -f ${DEST_NAME}
+  docker rm -f ${SSH_GEN_NAME}
+  docker rm -f ${SSH_TUNNEL_NAME}
+  docker rm -f ${SSH_SERVER_NAME}
   docker network remove ${NETWORK_NAME}
   docker volume remove ${VOLUME_NAME}
   echo "Cleaned up..."
@@ -50,7 +64,7 @@ docker volume create ${VOLUME_NAME}
 docker run --rm \
   --network=${NETWORK_NAME} \
   -e SERVER=${PROXY_NAME} \
-  -e TUNNEL_HOST=${DEST_NAME} \
+  -e TUNNEL_HOST=${SSH_TUNNEL_NAME} \
   --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
   -d \
   --name=${PROXY_NAME} \
@@ -62,7 +76,32 @@ docker run --rm \
   -d \
   --name=${DEST_NAME} \
   quay.io/k8start/http-headers:0.1.1 \
-    --port=5055
+  \
+  --port=5055
+
+# generate ssh keys
+docker run --rm \
+  --volume=${VOLUME_NAME}:/ssh_keys \
+  --name=${SSH_GEN_NAME} \
+  ${OPENSSH_TAG} \
+  ssh-keygen -q -N "" -f /ssh_keys/id_rsa
+
+# run ssh server
+docker run --rm \
+  --volume=${VOLUME_NAME}:/ssh_keys \
+  -e PUBLIC_KEY_FILE=/ssh_keys/id_rsa.pub \
+  -e USER_NAME=root \
+  -d \
+  --name=${SSH_SERVER_NAME}
+  linuxserver/openssh-server
+
+# run ssh tunnel
+docker run --rm \
+  --volume=${VOLUME_NAME}:/ssh_keys \
+  -d \
+  --name=${SSH_TUNNEL_NAME} \
+  ${OPENSSH_TAG} \
+    sleep infinite
 
 # test with container client
 docker run --rm \
