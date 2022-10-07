@@ -25,8 +25,3 @@ resource "digitalocean_droplet" "server" {
     ]
   }
 }
-
-provider "docker" {
-  host = "ssh://root@${digitalocean_droplet.server.ipv4_address}"
-  ssh_opts = ["-o", "StrictHostKeyChecking=no"]
-}
