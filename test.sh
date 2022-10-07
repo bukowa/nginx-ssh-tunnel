@@ -116,7 +116,7 @@ docker run --rm \
   --name=${CLIENT_NAME} \
   curlimages/curl \
   \
-  curl -v -L ${PROXY_NAME} \
+  curl --fail-with-body -v -L ${PROXY_NAME} \
     --cacert /certs/live/${SERVER}/fullchain.pem
 
-echo "Looks like it works!"
+echo "Looks like it works..."
