@@ -23,6 +23,7 @@ docker build --tag=${IMAGE_TAG} .
 docker build -t ${OPENSSH_TAG} -f - . <<EOF
 FROM alpine
 RUN apk add openssh autossh
+EXPOSE 5000
 EOF
 
 # if any of these exists - exit
@@ -60,32 +61,12 @@ trap cleanup 0
 docker network create ${NETWORK_NAME}
 docker volume create ${VOLUME_NAME}
 
-echo "Creating proxy container..."
-docker run --rm \
-  --network=${NETWORK_NAME} \
-  --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
-  -e SERVER=${PROXY_NAME} \
-  -e TUNNEL_HOST=${SSH_TUNNEL_NAME} \
-  -e TUNNEL_PORT=5000 \
-  -d \
-  --name=${PROXY_NAME} \
-  ${IMAGE_TAG}
-
-echo "Creating destination container..."
-docker run --rm \
-  --network=${NETWORK_NAME} \
-  --name=${DEST_NAME} \
-  -d \
-  quay.io/k8start/http-headers:0.1.1 \
-  \
-  --port=9000
-
 echo "Generating ssh keys..."
 docker run --rm \
   --volume=${VOLUME_NAME}:/ssh_keys \
   --name=${SSH_GEN_NAME} \
   ${OPENSSH_TAG} \
-  ssh-keygen -q -N "" -f /ssh_keys/id_rsa
+  ssh-keygen -q -N "" -f /ssh_keys/id_rsa &
 
 echo "Running ssh server..."
 docker run --rm \
@@ -94,22 +75,40 @@ docker run --rm \
   -e PUBLIC_KEY_FILE=/ssh_keys/id_rsa.pub \
   -e USER_NAME=dev \
   -e DOCKER_MODS=linuxserver/mods:openssh-server-ssh-tunnel \
-  -d \
+  -p 5000 \
   --name=${SSH_SERVER_NAME} \
-  linuxserver/openssh-server
+  linuxserver/openssh-server &
 
-sleep 2
+echo "Creating destination container..."
+docker run --rm \
+  --network=${NETWORK_NAME} \
+  --name=${DEST_NAME} \
+  quay.io/k8start/http-headers:0.1.1 \
+  \
+  --port=9000 &
+
+sleep 3
 echo "Running ssh tunnel..."
 docker run --rm \
   --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/ssh_keys \
   --name=${SSH_TUNNEL_NAME} \
-  -d \
   ${OPENSSH_TAG} \
     autossh -M 0 -N -o StrictHostKeyChecking=no \
     -i /ssh_keys/id_rsa -p 2222 \
-    -R 5000:${DEST_NAME}:9000 dev@${SSH_SERVER_NAME}
+    -R 0.0.0.0:5000:${DEST_NAME}:9000 dev@${SSH_SERVER_NAME} &
 
+echo "Creating proxy container..."
+docker run --rm \
+  --network=${NETWORK_NAME} \
+  --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
+  -e SERVER=${PROXY_NAME} \
+  -e TUNNEL_HOST=${SSH_SERVER_NAME} \
+  -e TUNNEL_PORT=5000 \
+  --name=${PROXY_NAME} \
+  ${IMAGE_TAG} &
+
+sleep 3
 echo "Running client waiting to be tunneled..."
 docker run --rm \
   --network=${NETWORK_NAME} \
