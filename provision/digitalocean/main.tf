@@ -47,6 +47,7 @@ resource "digitalocean_record" "domain" {
   type = "A"
   name = local.record_name
   value  = digitalocean_droplet.nginx_proxy.ipv4_address
+  ttl = 30
 }
 
 provider "docker" {

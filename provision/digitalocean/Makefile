@@ -9,6 +9,9 @@ apply:
 destroy:
 	terraform destroy --auto-approve
 
-.PHONY: ssh
+.PHONY: ssh tunnel apply destroy
 ssh:
 	ssh root@${IP}
+
+tunnel:
+	autossh -M 0 -N -R $(shell terraform output --raw tunnel_port):localhost:80 root@${IP}
