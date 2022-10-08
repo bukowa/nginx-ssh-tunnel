@@ -18,6 +18,7 @@ resource "digitalocean_droplet" "nginx_proxy" {
 
   provisioner "remote-exec" {
     inline = [
+      "sleep 5",
       "ufw --force reset",
       "ufw default deny incoming",
       "ufw default allow outgoing",
@@ -55,8 +56,17 @@ provider "docker" {
   ssh_opts = ["-o", "StrictHostKeyChecking=no"]
 }
 
+data "docker_registry_image" "nginx_proxy" {
+  name = "quay.io/k8start/nginx-ssh-tunnel"
+}
+
+resource "docker_image" "nginx_proxy" {
+  name = data.docker_registry_image.nginx_proxy.name
+  pull_triggers = [data.docker_registry_image.nginx_proxy.sha256_digest]
+}
+
 resource "docker_container" "nginx_proxy" {
-  image = "quay.io/k8start/nginx-ssh-tunnel:0.1.0"
+  image = docker_image.nginx_proxy.name
   name  = "http-proxy"
   restart = "always"
 
@@ -72,5 +82,4 @@ resource "docker_container" "nginx_proxy" {
     "TUNNEL_PORT=${var.tunnel_port}",
     "TUNNEL_HOST=${var.tunnel_host}",
   ]
-
 }

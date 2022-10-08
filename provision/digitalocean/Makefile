@@ -15,4 +15,7 @@ ssh:
 	ssh root@${IP}
 
 tunnel:
-	autossh -M 0 -N -R $(shell terraform output --raw tunnel_port):localhost:80 root@${IP}
+	autossh \
+	-o ServerAliveInterval=30 \
+	-o ServerAliveCountMax=1 \
+	-M 0 -N -R $(shell terraform output --raw tunnel_port):localhost:80 root@${IP}
