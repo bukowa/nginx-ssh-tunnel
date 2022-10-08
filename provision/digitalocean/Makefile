@@ -4,7 +4,8 @@ IP=$(shell terraform output ip)
 deploy: apply
 
 apply:
-	terraform  apply --auto-approve
+	terraform apply --auto-approve --target=digitalocean_droplet.nginx_proxy
+	terraform apply --auto-approve
 
 destroy:
 	terraform destroy --auto-approve
