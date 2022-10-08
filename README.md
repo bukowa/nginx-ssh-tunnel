@@ -1,3 +1,5 @@
+[![Docker Repository on Quay](https://quay.io/repository/k8start/nginx-ssh-tunnel/status "Docker Repository on Quay")](https://quay.io/repository/k8start/nginx-ssh-tunnel)
+![Workflow](https://github.com/bukowa/nginx-ssh-tunnel/actions/workflows/test.yaml/badge.svg)
 
 Tunnel http(s) traffic from internet facing endpoint into your machine via SSH.
 
