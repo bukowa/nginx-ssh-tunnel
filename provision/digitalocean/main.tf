@@ -4,6 +4,7 @@ data "digitalocean_ssh_key" "ssh" {
 }
 
 resource "digitalocean_droplet" "nginx_proxy" {
+  depends_on = [acme_certificate.certificate]
   image  = "docker-20-04"
   name   = "nginx-ssh-tunnel"
   region = "fra1"
@@ -26,16 +27,16 @@ resource "digitalocean_droplet" "nginx_proxy" {
       "ufw allow http",
       " ufw allow https",
       "ufw --force enable",
-      "mkdir -p ${var.volume_path}",
+      "mkdir -p ${var.volume_path}/live/${var.server_name}/",
     ]
   }
   provisioner "file" {
     content = acme_certificate.certificate.private_key_pem
-    destination = "${var.volume_path}/privkey.pem"
+    destination = "${var.volume_path}/live/${var.server_name}/privkey.pem"
   }
   provisioner "file" {
     content = "${acme_certificate.certificate.certificate_pem}${acme_certificate.certificate.issuer_pem}"
-    destination = "${var.volume_path}/fullchain.pem"
+    destination = "${var.volume_path}/live/${var.server_name}/fullchain.pem"
   }
 }
 
