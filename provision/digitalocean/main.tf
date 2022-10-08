@@ -18,6 +18,7 @@ resource "digitalocean_droplet" "nginx_proxy" {
 
   provisioner "remote-exec" {
     inline = [
+      "sleep 5",
       "ufw --force reset",
       "ufw default deny incoming",
       "ufw default allow outgoing",
