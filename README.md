@@ -18,7 +18,7 @@ docker run \
   -d \
   --name=http-proxy \
   \
-  quay.io/k8start/nginx-ssh-tunnel \
+  quay.io/k8start/nginx-ssh-tunnel:0.2.0 \
   \
   && \
   docker logs -f http-proxy

@@ -57,7 +57,7 @@ provider "docker" {
 }
 
 data "docker_registry_image" "nginx_proxy" {
-  name = "quay.io/k8start/nginx-ssh-tunnel"
+  name = "quay.io/k8start/nginx-ssh-tunnel:0.2.0"
 }
 
 resource "docker_image" "nginx_proxy" {
