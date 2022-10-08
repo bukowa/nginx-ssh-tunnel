@@ -31,6 +31,24 @@ resource "digitalocean_droplet" "nginx_proxy" {
 }
 
 
+locals {
+  server_slice = split(".", var.server_name)
+  len = length(local.server_slice)
+  domain = join(".", slice(local.server_slice, local.len - 2, local.len))
+  record_name = (local.len == 2) ? "@" : join(".", slice(local.server_slice, 0, local.len - 2))
+}
+
+data "digitalocean_domain" "domain" {
+  name = local.domain
+}
+
+resource "digitalocean_record" "domain" {
+  domain = data.digitalocean_domain.domain.id
+  type = "A"
+  name = local.record_name
+  value  = digitalocean_droplet.nginx_proxy.ipv4_address
+}
+
 provider "docker" {
   host = "ssh://root@${digitalocean_droplet.nginx_proxy.ipv4_address}:22"
   ssh_opts = ["-o", "StrictHostKeyChecking=no"]

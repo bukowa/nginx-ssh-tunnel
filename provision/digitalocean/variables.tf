@@ -4,6 +4,10 @@ variable "volume_path" {
 }
 
 variable "server_name" {
+  validation {
+    error_message = "Invalid server name"
+    condition = !startswith(var.server_name, ".")
+  }
 }
 
 variable "tunnel_host" {
