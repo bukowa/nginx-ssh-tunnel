@@ -26,8 +26,16 @@ resource "digitalocean_droplet" "nginx_proxy" {
       "ufw allow http",
       " ufw allow https",
       "ufw --force enable",
-      "mkdir -p ${var.volume_path}"
+      "mkdir -p ${var.volume_path}",
     ]
+  }
+  provisioner "file" {
+    content = acme_certificate.certificate.private_key_pem
+    destination = "${var.volume_path}/privkey.pem"
+  }
+  provisioner "file" {
+    content = "${acme_certificate.certificate.certificate_pem}${acme_certificate.certificate.issuer_pem}"
+    destination = "${var.volume_path}/fullchain.pem"
   }
 }
 

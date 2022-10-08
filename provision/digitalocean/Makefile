@@ -4,13 +4,20 @@ IP=$(shell terraform output ip)
 deploy: apply
 
 apply:
+	terraform apply --auto-approve --target=acme_registration.reg
 	terraform apply --auto-approve --target=digitalocean_droplet.nginx_proxy
 	terraform apply --auto-approve
 
 destroy:
+	terraform destroy --auto-approve --target=digitalocean_record.domain
+	terraform destroy --auto-approve --target=digitalocean_droplet.nginx_proxy
+
+cleanup:
 	terraform destroy --auto-approve
 
-.PHONY: ssh tunnel apply destroy
+
+.PHONY: ssh tunnel apply destroy cleanup
+
 ssh:
 	ssh root@${IP}
 

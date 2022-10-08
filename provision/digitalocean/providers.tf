@@ -9,5 +9,9 @@ terraform {
       source  = "kreuzwerker/docker"
       version = "2.22.0"
     }
+    acme = {
+      source  = "vancluever/acme"
+      version = "~> 2.0"
+    }
   }
 }
