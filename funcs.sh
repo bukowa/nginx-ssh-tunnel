@@ -20,6 +20,15 @@ function isInspectable {
     return 1
 }
 
+function forEach {
+  arr=("$@")
+  for i in "${arr[@]:1}"
+  do
+    INFO "Running docker $1 $i"
+    docker $1 "${i}"
+  done
+}
+
 function ERROR {
     echo "ERROR: $1"
 }

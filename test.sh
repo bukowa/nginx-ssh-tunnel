@@ -42,7 +42,7 @@ NETWORKS=(
 # Run `docker inspect` on these resources.
 # If any of these resources exists, quit.
 if isInspectable "${CONTAINERS[@]}" "${VOLUMES[@]}" "${NETWORKS[@]}"; then
-  echo "Some resources exist";
+  FATAL "Some resources exist";
 fi
 
 
@@ -60,37 +60,33 @@ EOF
 INFO "Building docker image for nginx proxy..."
 IMAGE_PROXY=$(docker build -q .)
 
-
 # Remove all resources created in this script
 function cleanup() {
-  INFO "Trapped... last exit code: $?"
   set +e
+  INFO "Trapped... last exit code: $?"
   INFO "Cleaning up..."
-  docker rm -f ${CONT_PROXY}
-  docker rm -f ${CONT_CLIENT}
-  docker rm -f ${CONT_DESTINATION}
-  docker rm -f ${CONT_SSHKEYGEN}
-  docker rm -f ${CONT_SSHTUNNEL}
-  docker rm -f ${CONT_SSHSERVER}
-  docker network remove ${NETWORK_NAME}
-  docker volume remove ${VOLUME_NAME}
-  echo "Cleaned up..."
+  forEach "container rm -f" "${CONTAINERS[@]}"
+  forEach "network rm" "${NETWORKS[@]}"
+  forEach "volume rm -f" "${VOLUMES[@]}"
+  INFO "Cleaned up..."
 }
 
 # set trap
 trap cleanup 0
 
-exit 1
 # create network and volume
 docker network create ${NETWORK_NAME}
 docker volume create ${VOLUME_NAME}
+
 
 echo "Generating ssh keys..."
 docker run --rm \
   --volume=${VOLUME_NAME}:/ssh_keys \
   --name=${CONT_SSHKEYGEN} \
-  ${OPENSSH_TAG} \
-  ssh-keygen -q -N "" -f /ssh_keys/id_rsa &
+  "${IMAGE_SSHTUNNEL}" \
+  ssh-keygen -q -N "" -f /ssh_keys/id_rsa
+
+exit 1
 
 echo "Running ssh server..."
 docker run --rm \
