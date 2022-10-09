@@ -89,6 +89,7 @@ docker run \
 RED=`echo -e '\033[0;31m'`
 BLUE=`echo -e '\033[0;34m'`
 GREEN=`echo -e '\033[0;32m'`
+PURPLE=`echo -e '\033[0;35m'`
 NC=`echo -e '\033[0m'` # No Color
 
 echo "Running ssh server..."
@@ -142,6 +143,6 @@ docker run --rm \
   curlimages/curl \
   \
   curl --fail-with-body -v -L ${CONT_PROXY} \
-    --cacert /certs/live/${SERVER}/fullchain.pem
+    --cacert /certs/live/${SERVER}/fullchain.pem 2>&1 | sed "s/.*/$PURPLE&$NC/"
 
 echo "Looks like it works..."
