@@ -84,6 +84,13 @@ docker run \
   "${IMAGE_SSHTUNNEL}" \
   ssh-keygen -q -N "" -f /ssh_keys/id_rsa
 
+
+
+RED=`echo -e '\033[0;31m'`
+BLUE=`echo -e '\033[0;34m'`
+GREEN=`echo -e '\033[0;32m'`
+NC=`echo -e '\033[0m'` # No Color
+
 echo "Running ssh server..."
 docker run \
   --network=${NETWORK_NAME} \
@@ -93,9 +100,8 @@ docker run \
   -e DOCKER_MODS=linuxserver/mods:openssh-server-ssh-tunnel \
   -p 5000 \
   --name=${CONT_SSHSERVER} \
-  linuxserver/openssh-server &
+  linuxserver/openssh-server 2>&1 | sed "s/.*/$RED&$NC/" &
 
-exit 1
 echo "Creating destination container..."
 docker run --rm \
   --network=${NETWORK_NAME} \
@@ -110,11 +116,12 @@ docker run --rm \
   --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/ssh_keys \
   --name=${CONT_SSHTUNNEL} \
-  ${OPENSSH_TAG} \
+  "${IMAGE_SSHTUNNEL}" \
     autossh -M 0 -N -o StrictHostKeyChecking=no \
     -i /ssh_keys/id_rsa -p 2222 \
-    -R 0.0.0.0:5000:${CONT_DESTINATION}:9000 dev@${CONT_SSHSERVER} &
+    -R 0.0.0.0:5000:${CONT_DESTINATION}:9000 dev@${CONT_SSHSERVER} 2>&1 | sed "s/.*/$BLUE&$NC/" &
 
+SERVER=${CONT_PROXY}
 sleep 5
 echo "Creating proxy container..."
 docker run --rm \
@@ -124,7 +131,7 @@ docker run --rm \
   -e TUNNEL_HOST=${CONT_SSHSERVER} \
   -e TUNNEL_PORT=5000 \
   --name=${CONT_PROXY} \
-  ${IMAGE_TAG} &
+  "${IMAGE_PROXY}" 2>&1 | sed "s/.*/$GREEN&$NC/" &
 
 sleep 5
 echo "Running client waiting to be tunneled..."
