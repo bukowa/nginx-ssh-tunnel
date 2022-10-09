@@ -24,14 +24,24 @@ RESOURCES=(
   "${NETWORK_NAME}" "${VOLUME_NAME}"
 )
 
-# If any of these resources exists, quit.
-if ! inspect "${RESOURCES[@]}"; then FATAL "Some resources exist"; fi
+# if any of these resources exists, quit.
+if ! inspect "${RESOURCES[@]}"; then
+  FATAL "Some resources exist";
+fi
 
-#docker build --tag=${IMAGE_TAG} .
-docker build -t ${OPENSSH_TAG} -f - . 1>/dev/null <<EOF
+DOCKERFILE="
 FROM alpine
 RUN apk add openssh autossh
 EXPOSE 5000
+"
+
+#docker build --tag=${IMAGE_TAG} .
+docker build -t ${OPENSSH_TAG} -f - . 1>/dev/null <<EOF
+$DOCKERFILE
+EOF
+
+docker build -t ${OPENSSH_TAG} -f - . 1>/dev/null <<EOF
+$(cat Dockerfile)
 EOF
 
 echo "here"

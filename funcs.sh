@@ -8,15 +8,23 @@ function inspect {
       INFO "Inspecting resource: $i..."
       if docker inspect "$i" &> /dev/null;
       then
-          WARN "Resource: $i exists..."
+          INFO "Resource: $i exists..."
           err+=("$i")
       fi
     done
     if [ "${#err[@]}" -gt 0 ];
     then
-      ERROR "Resources: ${err[*]} exists, quiting..."
+      INFO "Resources: ${err[*]} exists..."
       return 1
     fi
+}
+
+function build {
+  docker build -t ${OPENSSH_TAG} -f - . 1>/dev/null "<<EOF
+  FROM alpine
+  RUN apk add openssh autossh
+  EXPOSE 5000
+  EOF"
 }
 
 function ERROR {
