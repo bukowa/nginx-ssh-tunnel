@@ -1,6 +1,6 @@
 #!/bin/bash
 
-function inspect {
+function isInspectable {
     err=()
     arr=("$@")
     for i in "${arr[@]}"
@@ -15,16 +15,23 @@ function inspect {
     if [ "${#err[@]}" -gt 0 ];
     then
       INFO "Resources: ${err[*]} exists..."
-      return 1
+      return 0
     fi
+    return 1
 }
 
-function build {
-  docker build -t ${OPENSSH_TAG} -f - . 1>/dev/null "<<EOF
-  FROM alpine
-  RUN apk add openssh autossh
-  EXPOSE 5000
-  EOF"
+function buildNoContext {
+INFO "Building docker image without context: $1"
+docker build --tag "${1}" - 1>/dev/null <<EOF
+$2
+EOF
+}
+
+function buildWithContext {
+INFO "Building docker image with context: $1"
+docker build --tag "${1}" -f - . 1>/dev/null <<EOF
+$2
+EOF
 }
 
 function ERROR {
@@ -43,3 +50,23 @@ function FATAL {
     echo "FATAL: $1"
     exit 1
 }
+
+#
+#
+## 1
+#printf "${DOCKERFILE}" | docker build -t ${OPENSSH_TAG} -f - . 1>/dev/null
+#
+## 2
+#docker build -t ${OPENSSH_TAG} -f - . 1>/dev/null <<EOF
+#$(cat Dockerfile)
+#EOF
+#
+## 3
+#cat Dockerfile | docker build -t ${OPENSSH_TAG} -f - . 1>/dev/null
+#
+## 4
+#docker build -t ${OPENSSH_TAG} -f - . 1>/dev/null <<EOF
+#FROM alpine
+#RUN apk add autossh
+#EXPOSE 5000
+#EOF

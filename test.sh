@@ -14,6 +14,10 @@ CONT_SSHKEYGEN="just_a_ssh_gen_name"
 CONT_SSHTUNNEL="just_a_ssh_tunnel"
 CONT_SSHSERVER="just_a_ssh_server"
 
+# Docker Images
+IMAGE_PROXY="just_a_proxy:image"
+IMAGE_SSHTUNNEL="just_a_sshtunnel:image"
+
 # Docker Connection
 NETWORK_NAME="just_a_proxy_client_network"
 VOLUME_NAME="just_a_proxy_client_volume"
@@ -21,34 +25,32 @@ VOLUME_NAME="just_a_proxy_client_volume"
 RESOURCES=(
   "${CONT_CLIENT}" "${CONT_DESTINATION}" "${CONT_PROXY}"
   "${CONT_SSHKEYGEN}" "${CONT_SSHSERVER}" "${CONT_SSHTUNNEL}"
-  "${NETWORK_NAME}" "${VOLUME_NAME}"
+  "${NETWORK_NAME}" "${VOLUME_NAME}" "${IMAGE_PROXY}" "${IMAGE_SSHTUNNEL}"
 )
 
-# if any of these resources exists, quit.
-if ! inspect "${RESOURCES[@]}"; then
+# Do not override anything on the host.
+# Run `docker inspect` on these resources.
+# If any of these resources exists, quit.
+if isInspectable "${RESOURCES[@]}"; then
   FATAL "Some resources exist";
 fi
 
-DOCKERFILE="
+# Build docker image used by the client
+# that actually tunnels the traffic.
+buildNoContext "${IMAGE_SSHTUNNEL}" "
 FROM alpine
-RUN apk add openssh autossh
-EXPOSE 5000
+RUN apk add autossh
 "
 
-#docker build --tag=${IMAGE_TAG} .
-docker build -t ${OPENSSH_TAG} -f - . 1>/dev/null <<EOF
-$DOCKERFILE
-EOF
+trap 0 echo "ok"
 
-docker build -t ${OPENSSH_TAG} -f - . 1>/dev/null <<EOF
-$(cat Dockerfile)
-EOF
-
-echo "here"
+# Build nginx proxy docker container.
+buildWithContext "${CONT_PROXY}" "$(cat ./Dockerfile)"
 exit 1
-
 # container config
 SERVER=${CONT_PROXY}
+
+trap 0 echo "ok2"
 
 # # pull all images
 # docker pull linuxserver/openssh-server
