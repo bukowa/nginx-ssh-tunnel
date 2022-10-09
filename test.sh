@@ -51,8 +51,7 @@ fi
 INFO "Building docker image for ssh tunnel..."
 IMAGE_SSHTUNNEL=$(docker build -q - <<EOF
 FROM alpine
-RUN apk add openssh autossh
-EXPOSE 5000
+RUN apk add autossh
 EOF
 )
 
@@ -62,12 +61,11 @@ IMAGE_PROXY=$(docker build -q .)
 
 # Remove all resources created in this script
 function cleanup() {
-  set +e
   INFO "Trapped... last exit code: $?"
   INFO "Cleaning up..."
-  forEach "container rm -f" "${CONTAINERS[@]}"
-  forEach "network rm" "${NETWORKS[@]}"
-  forEach "volume rm -f" "${VOLUMES[@]}"
+  forEach "container rm -f" "${CONTAINERS[@]}" 2>&1 | grep -v "Error: No such "
+  forEach "network rm" "${NETWORKS[@]}" 2>&1 | grep -v "Error: No such "
+  forEach "volume rm -f" "${VOLUMES[@]}" 2>&1 | grep -v "Error: No such "
   INFO "Cleaned up..."
 }
 
@@ -80,16 +78,14 @@ docker volume create ${VOLUME_NAME}
 
 
 echo "Generating ssh keys..."
-docker run --rm \
+docker run \
   --volume=${VOLUME_NAME}:/ssh_keys \
   --name=${CONT_SSHKEYGEN} \
   "${IMAGE_SSHTUNNEL}" \
   ssh-keygen -q -N "" -f /ssh_keys/id_rsa
 
-exit 1
-
 echo "Running ssh server..."
-docker run --rm \
+docker run \
   --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/ssh_keys \
   -e PUBLIC_KEY_FILE=/ssh_keys/id_rsa.pub \
@@ -99,6 +95,7 @@ docker run --rm \
   --name=${CONT_SSHSERVER} \
   linuxserver/openssh-server &
 
+exit 1
 echo "Creating destination container..."
 docker run --rm \
   --network=${NETWORK_NAME} \
