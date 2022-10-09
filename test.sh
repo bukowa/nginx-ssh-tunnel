@@ -26,18 +26,25 @@ CONT_SSHSERVER="just_a_ssh_server"
 NETWORK_NAME="just_a_proxy_client_network"
 VOLUME_NAME="just_a_proxy_client_volume"
 
-RESOURCES=(
+CONTAINERS=(
   "${CONT_CLIENT}" "${CONT_DESTINATION}" "${CONT_PROXY}"
   "${CONT_SSHKEYGEN}" "${CONT_SSHSERVER}" "${CONT_SSHTUNNEL}"
-  "${NETWORK_NAME}" "${VOLUME_NAME}"
 )
+VOLUMES=(
+  "${VOLUME_NAME}"
+)
+NETWORKS=(
+  "${NETWORK_NAME}"
+)
+
 
 # Do not override anything on the host.
 # Run `docker inspect` on these resources.
 # If any of these resources exists, quit.
-if isInspectable "${RESOURCES[@]}"; then
+if isInspectable "${CONTAINERS[@]}" "${VOLUMES[@]}" "${NETWORKS[@]}"; then
   echo "Some resources exist";
 fi
+
 
 # Build docker image used by the client
 # that actually tunnels the traffic.
@@ -53,68 +60,12 @@ EOF
 INFO "Building docker image for nginx proxy..."
 IMAGE_PROXY=$(docker build -q .)
 
-exit 1
 
-# container config
-SERVER=${CONT_PROXY}
-
-trap ok 0
-
-
-# # pull all images
-# docker pull linuxserver/openssh-server
-# docker pull linuxserver/mods:openssh-server-ssh-tunnel
-# docker pull quay.io/k8start/http-headers:0.1.1
-# docker pull curlimages/curl
-#
-#Using default tag: latest
-#latest: Pulling from linuxserver/openssh-server
-#Digest: sha256:56df195fc1cf8db0aaf2108fc1d0f276843e70261c6fca598789fff2faddcce0
-#Status: Image is up to date for linuxserver/openssh-server:latest
-#docker.io/linuxserver/openssh-server:latest
-#openssh-server-ssh-tunnel: Pulling from linuxserver/mods
-#Digest: sha256:2890aea04dc9255c71ce533ba69f89302c0f739783f9ec0f3f2faf9adb30cf0c
-#Status: Image is up to date for linuxserver/mods:openssh-server-ssh-tunnel
-#docker.io/linuxserver/mods:openssh-server-ssh-tunnel
-#0.1.1: Pulling from k8start/http-headers
-#Digest: sha256:c453cf1dedd927dc6b94879f79661c2e436552ff8e7bffe7104ea1176c530fbb
-#Status: Image is up to date for quay.io/k8start/http-headers:0.1.1
-#quay.io/k8start/http-headers:0.1.1
-#Using default tag: latest
-#latest: Pulling from curlimages/curl
-#Digest: sha256:9fab1b73f45e06df9506d947616062d7e8319009257d3a05d970b0de80a41ec5
-#Status: Image is up to date for curlimages/curl:latest
-#docker.io/curlimages/curl:latest
-
-# build docker images
-# docker build --tag=${IMAGE_TAG} .
- docker build -t ${OPENSSH_TAG} -f - . <<EOF
- FROM alpine
- RUN apk add openssh autossh
- EXPOSE 5000
- EOF
-source funcs.sh
-
-inspect ${CONT_PROXY} ${CONT_CLIENT}
-exit 1
-
-# if any of these exists - exit
-echo "Checking if we can run..."
-if docker inspect ${CONT_PROXY}; then echo "this is bad"; exit 1; fi
-if docker inspect ${CONT_CLIENT}; then echo "this is bad"; exit 1; fi
-if docker inspect ${CONT_DESTINATION}; then echo "this is bad"; exit 1; fi
-if docker inspect ${CONT_SSHTUNNEL}; then echo "this is bad"; exit 1; fi
-if docker inspect ${CONT_SSHSERVER}; then echo "this is bad"; exit 1; fi
-if docker inspect ${CONT_SSHKEYGEN}; then echo "this is bad"; exit 1; fi
-if docker network inspect ${NETWORK_NAME}; then echo "this is bad"; exit 1; fi
-if docker volume inspect ${VOLUME_NAME}; then echo "this is bad"; exit 1; fi
-echo "We can run...!"
-
-# remove all resources created in this script
+# Remove all resources created in this script
 function cleanup() {
-  echo "Trapped... last exit code: $?"
+  INFO "Trapped... last exit code: $?"
   set +e
-  echo "Cleaning up..."
+  INFO "Cleaning up..."
   docker rm -f ${CONT_PROXY}
   docker rm -f ${CONT_CLIENT}
   docker rm -f ${CONT_DESTINATION}
@@ -129,6 +80,7 @@ function cleanup() {
 # set trap
 trap cleanup 0
 
+exit 1
 # create network and volume
 docker network create ${NETWORK_NAME}
 docker volume create ${VOLUME_NAME}
