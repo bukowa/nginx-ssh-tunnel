@@ -1,28 +1,50 @@
 #!/bin/bash
 set -e
+source funcs.sh
 
 # docker images
 IMAGE_TAG=testsshtunnel
 OPENSSH_TAG="openssh_sshtunnel"
 
-# docker related stuff
-PROXY_NAME="just_a_proxy"
-CLIENT_NAME="just_a_client"
-SSH_TUNNEL_NAME="just_a_ssh_tunnel"
-SSH_SERVER_NAME="just_a_ssh_server"
-SSH_GEN_NAME="just_a_ssh_gen_name"
-DEST_NAME="just_a_destination"
+# Docker Containers
+CONT_CLIENT="just_a_client"
+CONT_DESTINATION="just_a_destination"
+CONT_PROXY="just_a_proxy"
+CONT_SSHKEYGEN="just_a_ssh_gen_name"
+CONT_SSHTUNNEL="just_a_ssh_tunnel"
+CONT_SSHSERVER="just_a_ssh_server"
+
+# Docker Connection
 NETWORK_NAME="just_a_proxy_client_network"
 VOLUME_NAME="just_a_proxy_client_volume"
 
-# container config
-SERVER=${PROXY_NAME}
+RESOURCES=(
+  "${CONT_CLIENT}" "${CONT_DESTINATION}" "${CONT_PROXY}"
+  "${CONT_SSHKEYGEN}" "${CONT_SSHSERVER}" "${CONT_SSHTUNNEL}"
+  "${NETWORK_NAME}" "${VOLUME_NAME}"
+)
 
-# pull all images
-docker pull linuxserver/openssh-server
-docker pull linuxserver/mods:openssh-server-ssh-tunnel
-docker pull quay.io/k8start/http-headers:0.1.1
-docker pull curlimages/curl
+# If any of these resources exists, quit.
+if ! inspect "${RESOURCES[@]}"; then FATAL "Some resources exist"; fi
+
+#docker build --tag=${IMAGE_TAG} .
+docker build -t ${OPENSSH_TAG} -f - . 1>/dev/null <<EOF
+FROM alpine
+RUN apk add openssh autossh
+EXPOSE 5000
+EOF
+
+echo "here"
+exit 1
+
+# container config
+SERVER=${CONT_PROXY}
+
+# # pull all images
+# docker pull linuxserver/openssh-server
+# docker pull linuxserver/mods:openssh-server-ssh-tunnel
+# docker pull quay.io/k8start/http-headers:0.1.1
+# docker pull curlimages/curl
 #
 #Using default tag: latest
 #latest: Pulling from linuxserver/openssh-server
@@ -44,21 +66,25 @@ docker pull curlimages/curl
 #docker.io/curlimages/curl:latest
 
 # build docker images
-docker build --tag=${IMAGE_TAG} .
-docker build -t ${OPENSSH_TAG} -f - . <<EOF
-FROM alpine
-RUN apk add openssh autossh
-EXPOSE 5000
-EOF
+# docker build --tag=${IMAGE_TAG} .
+# docker build -t ${OPENSSH_TAG} -f - . <<EOF
+# FROM alpine
+# RUN apk add openssh autossh
+# EXPOSE 5000
+# EOF
+source funcs.sh
+
+inspect ${CONT_PROXY} ${CONT_CLIENT}
+exit 1
 
 # if any of these exists - exit
 echo "Checking if we can run..."
-if docker inspect ${PROXY_NAME}; then echo "this is bad"; exit 1; fi
-if docker inspect ${CLIENT_NAME}; then echo "this is bad"; exit 1; fi
-if docker inspect ${DEST_NAME}; then echo "this is bad"; exit 1; fi
-if docker inspect ${SSH_TUNNEL_NAME}; then echo "this is bad"; exit 1; fi
-if docker inspect ${SSH_SERVER_NAME}; then echo "this is bad"; exit 1; fi
-if docker inspect ${SSH_GEN_NAME}; then echo "this is bad"; exit 1; fi
+if docker inspect ${CONT_PROXY}; then echo "this is bad"; exit 1; fi
+if docker inspect ${CONT_CLIENT}; then echo "this is bad"; exit 1; fi
+if docker inspect ${CONT_DESTINATION}; then echo "this is bad"; exit 1; fi
+if docker inspect ${CONT_SSHTUNNEL}; then echo "this is bad"; exit 1; fi
+if docker inspect ${CONT_SSHSERVER}; then echo "this is bad"; exit 1; fi
+if docker inspect ${CONT_SSHKEYGEN}; then echo "this is bad"; exit 1; fi
 if docker network inspect ${NETWORK_NAME}; then echo "this is bad"; exit 1; fi
 if docker volume inspect ${VOLUME_NAME}; then echo "this is bad"; exit 1; fi
 echo "We can run...!"
@@ -68,12 +94,12 @@ function cleanup() {
   echo "Trapped... last exit code: $?"
   set +e
   echo "Cleaning up..."
-  docker rm -f ${PROXY_NAME}
-  docker rm -f ${CLIENT_NAME}
-  docker rm -f ${DEST_NAME}
-  docker rm -f ${SSH_GEN_NAME}
-  docker rm -f ${SSH_TUNNEL_NAME}
-  docker rm -f ${SSH_SERVER_NAME}
+  docker rm -f ${CONT_PROXY}
+  docker rm -f ${CONT_CLIENT}
+  docker rm -f ${CONT_DESTINATION}
+  docker rm -f ${CONT_SSHKEYGEN}
+  docker rm -f ${CONT_SSHTUNNEL}
+  docker rm -f ${CONT_SSHSERVER}
   docker network remove ${NETWORK_NAME}
   docker volume remove ${VOLUME_NAME}
   echo "Cleaned up..."
@@ -89,7 +115,7 @@ docker volume create ${VOLUME_NAME}
 echo "Generating ssh keys..."
 docker run --rm \
   --volume=${VOLUME_NAME}:/ssh_keys \
-  --name=${SSH_GEN_NAME} \
+  --name=${CONT_SSHKEYGEN} \
   ${OPENSSH_TAG} \
   ssh-keygen -q -N "" -f /ssh_keys/id_rsa &
 
@@ -101,13 +127,13 @@ docker run --rm \
   -e USER_NAME=dev \
   -e DOCKER_MODS=linuxserver/mods:openssh-server-ssh-tunnel \
   -p 5000 \
-  --name=${SSH_SERVER_NAME} \
+  --name=${CONT_SSHSERVER} \
   linuxserver/openssh-server &
 
 echo "Creating destination container..."
 docker run --rm \
   --network=${NETWORK_NAME} \
-  --name=${DEST_NAME} \
+  --name=${CONT_DESTINATION} \
   quay.io/k8start/http-headers:0.1.1 \
   \
   --port=9000 &
@@ -117,21 +143,21 @@ echo "Running ssh tunnel..."
 docker run --rm \
   --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/ssh_keys \
-  --name=${SSH_TUNNEL_NAME} \
+  --name=${CONT_SSHTUNNEL} \
   ${OPENSSH_TAG} \
     autossh -M 0 -N -o StrictHostKeyChecking=no \
     -i /ssh_keys/id_rsa -p 2222 \
-    -R 0.0.0.0:5000:${DEST_NAME}:9000 dev@${SSH_SERVER_NAME} &
+    -R 0.0.0.0:5000:${CONT_DESTINATION}:9000 dev@${CONT_SSHSERVER} &
 
 sleep 5
 echo "Creating proxy container..."
 docker run --rm \
   --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
-  -e SERVER=${PROXY_NAME} \
-  -e TUNNEL_HOST=${SSH_SERVER_NAME} \
+  -e SERVER=${CONT_PROXY} \
+  -e TUNNEL_HOST=${CONT_SSHSERVER} \
   -e TUNNEL_PORT=5000 \
-  --name=${PROXY_NAME} \
+  --name=${CONT_PROXY} \
   ${IMAGE_TAG} &
 
 sleep 5
@@ -139,10 +165,10 @@ echo "Running client waiting to be tunneled..."
 docker run --rm \
   --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
-  --name=${CLIENT_NAME} \
+  --name=${CONT_CLIENT} \
   curlimages/curl \
   \
-  curl --fail-with-body -v -L ${PROXY_NAME} \
+  curl --fail-with-body -v -L ${CONT_PROXY} \
     --cacert /certs/live/${SERVER}/fullchain.pem
 
 echo "Looks like it works..."
