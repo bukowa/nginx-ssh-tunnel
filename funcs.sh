@@ -20,20 +20,6 @@ function isInspectable {
     return 1
 }
 
-function buildNoContext {
-INFO "Building docker image without context: $1"
-docker build --tag "${1}" - 1>/dev/null <<EOF
-$2
-EOF
-}
-
-function buildWithContext {
-INFO "Building docker image with context: $1"
-docker build --tag "${1}" -f - . 1>/dev/null <<EOF
-$2
-EOF
-}
-
 function ERROR {
     echo "ERROR: $1"
 }

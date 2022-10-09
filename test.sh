@@ -1,4 +1,12 @@
 #!/bin/bash
+
+# GNU bash, version 5.1.16(1)-release (x86_64-pc-linux-gnu)
+# Copyright (C) 2020 Free Software Foundation, Inc.
+# License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+#
+# This is free software; you are free to change and redistribute it.
+# There is NO WARRANTY, to the extent permitted by law.
+
 set -e
 source funcs.sh
 
@@ -14,10 +22,6 @@ CONT_SSHKEYGEN="just_a_ssh_gen_name"
 CONT_SSHTUNNEL="just_a_ssh_tunnel"
 CONT_SSHSERVER="just_a_ssh_server"
 
-# Docker Images
-IMAGE_PROXY="just_a_proxy:image"
-IMAGE_SSHTUNNEL="just_a_sshtunnel:image"
-
 # Docker Connection
 NETWORK_NAME="just_a_proxy_client_network"
 VOLUME_NAME="just_a_proxy_client_volume"
@@ -25,32 +29,37 @@ VOLUME_NAME="just_a_proxy_client_volume"
 RESOURCES=(
   "${CONT_CLIENT}" "${CONT_DESTINATION}" "${CONT_PROXY}"
   "${CONT_SSHKEYGEN}" "${CONT_SSHSERVER}" "${CONT_SSHTUNNEL}"
-  "${NETWORK_NAME}" "${VOLUME_NAME}" "${IMAGE_PROXY}" "${IMAGE_SSHTUNNEL}"
+  "${NETWORK_NAME}" "${VOLUME_NAME}"
 )
 
 # Do not override anything on the host.
 # Run `docker inspect` on these resources.
 # If any of these resources exists, quit.
 if isInspectable "${RESOURCES[@]}"; then
-  FATAL "Some resources exist";
+  echo "Some resources exist";
 fi
 
 # Build docker image used by the client
 # that actually tunnels the traffic.
-buildNoContext "${IMAGE_SSHTUNNEL}" "
+INFO "Building docker image for ssh tunnel..."
+IMAGE_SSHTUNNEL=$(docker build -q - <<EOF
 FROM alpine
-RUN apk add autossh
-"
-
-trap 0 echo "ok"
+RUN apk add openssh autossh
+EXPOSE 5000
+EOF
+)
 
 # Build nginx proxy docker container.
-buildWithContext "${CONT_PROXY}" "$(cat ./Dockerfile)"
+INFO "Building docker image for nginx proxy..."
+IMAGE_PROXY=$(docker build -q .)
+
 exit 1
+
 # container config
 SERVER=${CONT_PROXY}
 
-trap 0 echo "ok2"
+trap ok 0
+
 
 # # pull all images
 # docker pull linuxserver/openssh-server
@@ -79,11 +88,11 @@ trap 0 echo "ok2"
 
 # build docker images
 # docker build --tag=${IMAGE_TAG} .
-# docker build -t ${OPENSSH_TAG} -f - . <<EOF
-# FROM alpine
-# RUN apk add openssh autossh
-# EXPOSE 5000
-# EOF
+ docker build -t ${OPENSSH_TAG} -f - . <<EOF
+ FROM alpine
+ RUN apk add openssh autossh
+ EXPOSE 5000
+ EOF
 source funcs.sh
 
 inspect ${CONT_PROXY} ${CONT_CLIENT}
