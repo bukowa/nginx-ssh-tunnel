@@ -10,11 +10,6 @@
 set -e
 source funcs.sh
 
-# docker images
-IMAGE_TAG=testsshtunnel
-OPENSSH_TAG="openssh_sshtunnel"
-
-# Docker Containers
 CONT_CLIENT="just_a_client"
 CONT_DESTINATION="just_a_destination"
 CONT_PROXY="just_a_proxy"
@@ -22,7 +17,6 @@ CONT_SSHKEYGEN="just_a_ssh_gen_name"
 CONT_SSHTUNNEL="just_a_ssh_tunnel"
 CONT_SSHSERVER="just_a_ssh_server"
 
-# Docker Connection
 NETWORK_NAME="just_a_proxy_client_network"
 VOLUME_NAME="just_a_proxy_client_volume"
 
@@ -37,14 +31,12 @@ NETWORKS=(
   "${NETWORK_NAME}"
 )
 
-
 # Do not override anything on the host.
 # Run `docker inspect` on these resources.
 # If any of these resources exists, quit.
 if isInspectable "${CONTAINERS[@]}" "${VOLUMES[@]}" "${NETWORKS[@]}"; then
   FATAL "Some resources exist";
 fi
-
 
 # Build docker image used by the client
 # that actually tunnels the traffic.
@@ -76,7 +68,6 @@ trap cleanup 0
 docker network create ${NETWORK_NAME}
 docker volume create ${VOLUME_NAME}
 
-
 echo "Generating ssh keys..."
 docker run \
   --volume=${VOLUME_NAME}:/ssh_keys \
@@ -84,13 +75,11 @@ docker run \
   "${IMAGE_SSHTUNNEL}" \
   ssh-keygen -q -N "" -f /ssh_keys/id_rsa
 
-
-
 RED=`echo -e '\033[0;31m'`
 BLUE=`echo -e '\033[0;34m'`
 GREEN=`echo -e '\033[0;32m'`
 PURPLE=`echo -e '\033[0;35m'`
-NC=`echo -e '\033[0m'` # No Color
+NC=`echo -e '\033[0m'`
 
 echo "Running ssh server..."
 docker run \
@@ -146,3 +135,4 @@ docker run --rm \
     --cacert /certs/live/${SERVER}/fullchain.pem 2>&1 | sed "s/.*/$PURPLE&$NC/"
 
 echo "Looks like it works..."
+# todo test for wildcard header host and actual output
