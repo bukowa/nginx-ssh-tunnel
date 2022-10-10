@@ -31,11 +31,25 @@ NETWORKS=(
   "${NETWORK_NAME}"
 )
 
+# Remove all resources created in this script
+function cleanup() {
+  INFO "Trapped... last exit code: $?"
+  INFO "Cleaning up..."
+  forEach "container rm -f" "${CONTAINERS[@]}"
+  forEach "network rm" "${NETWORKS[@]}"
+  forEach "volume rm -f" "${VOLUMES[@]}"
+  INFO "Cleaned up..."
+}
+
 # Do not override anything on the host.
 # Run `docker inspect` on these resources.
 # If any of these resources exists, quit.
 if isInspectable "${CONTAINERS[@]}" "${VOLUMES[@]}" "${NETWORKS[@]}"; then
-  FATAL "Some resources exist";
+  if [ $FORCE_CLEANUP == "1" ]; then
+    cleanup
+  else
+    FATAL "Some resources exist";
+  fi
 fi
 
 # Build docker image used by the client
@@ -51,38 +65,49 @@ EOF
 INFO "Building docker image for nginx proxy..."
 IMAGE_PROXY=$(docker build -q .)
 
-# Remove all resources created in this script
-function cleanup() {
-  INFO "Trapped... last exit code: $?"
-  INFO "Cleaning up..."
-  forEach "container rm -f" "${CONTAINERS[@]}" 2>&1 | grep -v "Error: No such "
-  forEach "network rm" "${NETWORKS[@]}" 2>&1 | grep -v "Error: No such "
-  forEach "volume rm -f" "${VOLUMES[@]}" 2>&1 | grep -v "Error: No such "
-  INFO "Cleaned up..."
+function traps {
+  cleanup
 }
 
 # set trap
-trap cleanup 0
+trap traps 0
 
 # create network and volume
 docker network create ${NETWORK_NAME}
 docker volume create ${VOLUME_NAME}
 
+RED=$(echo -e '\033[0;31m')
+BLUE=$(echo -e '\033[0;34m')
+GREEN=$(echo -e '\033[0;32m')
+YELLOW=$(echo -e '\033[0;33m')
+PURPLE=$(echo -e '\033[0;35m')
+NC=$(echo -e '\033[0m')
+
+WILDCARD_HOST="*.${CONT_PROXY}"
+REQUEST_HOST="test.${CONT_PROXY}"
+
+echo "Creating proxy container..."
+docker run --rm \
+  --network=${NETWORK_NAME} \
+  --volume="${VOLUME_NAME}:/certs/live/${WILDCARD_HOST}" \
+  -e SERVER="${WILDCARD_HOST}" \
+  -e SUBJECT="${WILDCARD_HOST}" \
+  -e ALTNAME="${REQUEST_HOST}" \
+  --network-alias="${REQUEST_HOST}" \
+  -e TUNNEL_HOST=${CONT_SSHSERVER} \
+  -e TUNNEL_PORT=5000 \
+  --name=${CONT_PROXY} \
+  "${IMAGE_PROXY}" 2>&1 | sed "s/.*/$GREEN&$NC/" &
+
 echo "Generating ssh keys..."
-docker run \
+docker run --rm \
   --volume=${VOLUME_NAME}:/ssh_keys \
   --name=${CONT_SSHKEYGEN} \
   "${IMAGE_SSHTUNNEL}" \
   ssh-keygen -q -N "" -f /ssh_keys/id_rsa
 
-RED=`echo -e '\033[0;31m'`
-BLUE=`echo -e '\033[0;34m'`
-GREEN=`echo -e '\033[0;32m'`
-PURPLE=`echo -e '\033[0;35m'`
-NC=`echo -e '\033[0m'`
-
 echo "Running ssh server..."
-docker run \
+docker run --rm \
   --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/ssh_keys \
   -e PUBLIC_KEY_FILE=/ssh_keys/id_rsa.pub \
@@ -98,7 +123,7 @@ docker run --rm \
   --name=${CONT_DESTINATION} \
   quay.io/k8start/http-headers:0.1.1 \
   \
-  --port=9000 &
+  --port=9000 2>&1 | sed "s/.*/$YELLOW&$NC/" &
 
 sleep 5
 echo "Running ssh tunnel..."
@@ -111,28 +136,20 @@ docker run --rm \
     -i /ssh_keys/id_rsa -p 2222 \
     -R 0.0.0.0:5000:${CONT_DESTINATION}:9000 dev@${CONT_SSHSERVER} 2>&1 | sed "s/.*/$BLUE&$NC/" &
 
-SERVER=${CONT_PROXY}
-sleep 5
-echo "Creating proxy container..."
-docker run --rm \
-  --network=${NETWORK_NAME} \
-  --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
-  -e SERVER=${CONT_PROXY} \
-  -e TUNNEL_HOST=${CONT_SSHSERVER} \
-  -e TUNNEL_PORT=5000 \
-  --name=${CONT_PROXY} \
-  "${IMAGE_PROXY}" 2>&1 | sed "s/.*/$GREEN&$NC/" &
-
 sleep 5
 echo "Running client waiting to be tunneled..."
 docker run --rm \
   --network=${NETWORK_NAME} \
-  --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
+  --volume="${VOLUME_NAME}:/certs/live/${WILDCARD_HOST}" \
   --name=${CONT_CLIENT} \
   curlimages/curl \
   \
-  curl --fail-with-body -v -L ${CONT_PROXY} \
-    --cacert /certs/live/${SERVER}/fullchain.pem 2>&1 | sed "s/.*/$PURPLE&$NC/"
+  curl --fail-with-body -v -L "${REQUEST_HOST}" \
+    --cacert /certs/live/*.${CONT_PROXY}/fullchain.pem 2>&1 | sed "s/.*/$PURPLE&$NC/"
 
 echo "Looks like it works..."
 # todo test for wildcard header host and actual output
+# todo get all containers and pull before test
+# todo know when container is ready by its logs
+
+sleep infinity
