@@ -134,7 +134,7 @@ docker run --rm \
   --name=${PROXY_NAME} \
   ${IMAGE_TAG} &
 
-sleep 5
+sleep 10
 echo "Running client waiting to be tunneled..."
 docker run --rm \
   --network=${NETWORK_NAME} \
