@@ -31,6 +31,12 @@ NETWORKS=(
   "${NETWORK_NAME}"
 )
 
+PULL_IMAGES=(
+  "alpine" "nginx:alpine"
+  "quay.io/k8start/http-headers:1.0.0"
+  "linuxserver/openssh-server:9.0_p1-r2-ls94"
+)
+
 # Remove all resources created in this script
 function cleanup() {
   INFO "Trapped... last exit code: $?"
@@ -45,12 +51,15 @@ function cleanup() {
 # Run `docker inspect` on these resources.
 # If any of these resources exists, quit.
 if isInspectable "${CONTAINERS[@]}" "${VOLUMES[@]}" "${NETWORKS[@]}"; then
-  if [ $FORCE_CLEANUP == "1" ]; then
+  if [[ $FORCE_CLEANUP == "1" ]]; then
     cleanup
   else
     FATAL "Some resources exist";
   fi
 fi
+
+# Pull images
+forEach "pull" "${PULL_IMAGES[@]}"
 
 # Build docker image used by the client
 # that actually tunnels the traffic.
@@ -115,13 +124,13 @@ docker run --rm \
   -e DOCKER_MODS=linuxserver/mods:openssh-server-ssh-tunnel \
   -p 5000 \
   --name=${CONT_SSHSERVER} \
-  linuxserver/openssh-server 2>&1 | sed "s/.*/$RED&$NC/" &
+  linuxserver/openssh-server:9.0_p1-r2-ls94 2>&1 | sed "s/.*/$RED&$NC/" &
 
 echo "Creating destination container..."
 docker run --rm \
   --network=${NETWORK_NAME} \
   --name=${CONT_DESTINATION} \
-  quay.io/k8start/http-headers:0.1.1 \
+  quay.io/k8start/http-headers:1.0.0 \
   \
   --port=9000 2>&1 | sed "s/.*/$YELLOW&$NC/" &
 
@@ -138,18 +147,28 @@ docker run --rm \
 
 sleep 5
 echo "Running client waiting to be tunneled..."
-docker run --rm \
+RESULT=$(docker run --rm \
   --network=${NETWORK_NAME} \
   --volume="${VOLUME_NAME}:/certs/live/${WILDCARD_HOST}" \
   --name=${CONT_CLIENT} \
   curlimages/curl \
   \
-  curl --fail-with-body -v -L "${REQUEST_HOST}" \
-    --cacert /certs/live/*.${CONT_PROXY}/fullchain.pem 2>&1 | sed "s/.*/$PURPLE&$NC/"
+  curl:7.85.0 --fail-with-body -v -L \
+  -H 'User-Agent:' -H 'Header1: header1' -H 'Header2: header2'\
+  "${REQUEST_HOST}" \
+    --cacert /certs/live/*.${CONT_PROXY}/fullchain.pem)
 
-echo "Looks like it works..."
-# todo test for wildcard header host and actual output
-# todo get all containers and pull before test
-# todo know when container is ready by its logs
+WANT="Instance name: example
+Accept: [*/*]
+Connection: [close]
+Header1: [header1]
+Header2: [header2]
+Host: [$REQUEST_HOST]"
 
-sleep infinity
+printf "===\nResult:\n===\n$RESULT\n"; printf "===\nWant:\n===\n$WANT\n===\n";
+
+if [[ "$RESULT" != "$WANT" ]]; then
+  printf "test failed"; exit 1
+  else
+    echo "test passed"
+fi

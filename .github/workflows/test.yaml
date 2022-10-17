@@ -16,4 +16,4 @@ jobs:
 
       - name: "Test.sh"
         run: |
-          ./test.sh
+          FORCE_CLEANUP=1 ./test.sh
