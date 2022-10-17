@@ -1,97 +1,119 @@
 #!/bin/bash
+
+# GNU bash, version 5.1.16(1)-release (x86_64-pc-linux-gnu)
+# Copyright (C) 2020 Free Software Foundation, Inc.
+# License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+#
+# This is free software; you are free to change and redistribute it.
+# There is NO WARRANTY, to the extent permitted by law.
+
 set -e
+source funcs.sh
 
-# docker images
-IMAGE_TAG=testsshtunnel
-OPENSSH_TAG="openssh_sshtunnel"
+CONT_CLIENT="just_a_client"
+CONT_DESTINATION="just_a_destination"
+CONT_PROXY="just_a_proxy"
+CONT_SSHKEYGEN="just_a_ssh_gen_name"
+CONT_SSHTUNNEL="just_a_ssh_tunnel"
+CONT_SSHSERVER="just_a_ssh_server"
 
-# docker related stuff
-PROXY_NAME="just_a_proxy"
-CLIENT_NAME="just_a_client"
-SSH_TUNNEL_NAME="just_a_ssh_tunnel"
-SSH_SERVER_NAME="just_a_ssh_server"
-SSH_GEN_NAME="just_a_ssh_gen_name"
-DEST_NAME="just_a_destination"
 NETWORK_NAME="just_a_proxy_client_network"
 VOLUME_NAME="just_a_proxy_client_volume"
 
-# container config
-SERVER=${PROXY_NAME}
+CONTAINERS=(
+  "${CONT_CLIENT}" "${CONT_DESTINATION}" "${CONT_PROXY}"
+  "${CONT_SSHKEYGEN}" "${CONT_SSHSERVER}" "${CONT_SSHTUNNEL}"
+)
+VOLUMES=(
+  "${VOLUME_NAME}"
+)
+NETWORKS=(
+  "${NETWORK_NAME}"
+)
 
-# pull all images
-docker pull linuxserver/openssh-server
-docker pull linuxserver/mods:openssh-server-ssh-tunnel
-docker pull quay.io/k8start/http-headers:0.1.1
-docker pull curlimages/curl
-#
-#Using default tag: latest
-#latest: Pulling from linuxserver/openssh-server
-#Digest: sha256:56df195fc1cf8db0aaf2108fc1d0f276843e70261c6fca598789fff2faddcce0
-#Status: Image is up to date for linuxserver/openssh-server:latest
-#docker.io/linuxserver/openssh-server:latest
-#openssh-server-ssh-tunnel: Pulling from linuxserver/mods
-#Digest: sha256:2890aea04dc9255c71ce533ba69f89302c0f739783f9ec0f3f2faf9adb30cf0c
-#Status: Image is up to date for linuxserver/mods:openssh-server-ssh-tunnel
-#docker.io/linuxserver/mods:openssh-server-ssh-tunnel
-#0.1.1: Pulling from k8start/http-headers
-#Digest: sha256:c453cf1dedd927dc6b94879f79661c2e436552ff8e7bffe7104ea1176c530fbb
-#Status: Image is up to date for quay.io/k8start/http-headers:0.1.1
-#quay.io/k8start/http-headers:0.1.1
-#Using default tag: latest
-#latest: Pulling from curlimages/curl
-#Digest: sha256:9fab1b73f45e06df9506d947616062d7e8319009257d3a05d970b0de80a41ec5
-#Status: Image is up to date for curlimages/curl:latest
-#docker.io/curlimages/curl:latest
+PULL_IMAGES=(
+  "alpine" "nginx:alpine"
+  "quay.io/k8start/http-headers:1.0.0"
+  "linuxserver/openssh-server:9.0_p1-r2-ls94"
+)
 
-# build docker images
-docker build --tag=${IMAGE_TAG} .
-docker build -t ${OPENSSH_TAG} -f - . <<EOF
-FROM alpine
-RUN apk add openssh autossh
-EXPOSE 5000
-EOF
-
-# if any of these exists - exit
-echo "Checking if we can run..."
-if docker inspect ${PROXY_NAME}; then echo "this is bad"; exit 1; fi
-if docker inspect ${CLIENT_NAME}; then echo "this is bad"; exit 1; fi
-if docker inspect ${DEST_NAME}; then echo "this is bad"; exit 1; fi
-if docker inspect ${SSH_TUNNEL_NAME}; then echo "this is bad"; exit 1; fi
-if docker inspect ${SSH_SERVER_NAME}; then echo "this is bad"; exit 1; fi
-if docker inspect ${SSH_GEN_NAME}; then echo "this is bad"; exit 1; fi
-if docker network inspect ${NETWORK_NAME}; then echo "this is bad"; exit 1; fi
-if docker volume inspect ${VOLUME_NAME}; then echo "this is bad"; exit 1; fi
-echo "We can run...!"
-
-# remove all resources created in this script
+# Remove all resources created in this script
 function cleanup() {
-  echo "Trapped... last exit code: $?"
-  set +e
-  echo "Cleaning up..."
-  docker rm -f ${PROXY_NAME}
-  docker rm -f ${CLIENT_NAME}
-  docker rm -f ${DEST_NAME}
-  docker rm -f ${SSH_GEN_NAME}
-  docker rm -f ${SSH_TUNNEL_NAME}
-  docker rm -f ${SSH_SERVER_NAME}
-  docker network remove ${NETWORK_NAME}
-  docker volume remove ${VOLUME_NAME}
-  echo "Cleaned up..."
+  INFO "Trapped... last exit code: $?"
+  INFO "Cleaning up..."
+  forEach "container rm -f" "${CONTAINERS[@]}"
+  forEach "network rm" "${NETWORKS[@]}"
+  forEach "volume rm -f" "${VOLUMES[@]}"
+  INFO "Cleaned up..."
+}
+
+# Do not override anything on the host.
+# Run `docker inspect` on these resources.
+# If any of these resources exists, quit.
+if isInspectable "${CONTAINERS[@]}" "${VOLUMES[@]}" "${NETWORKS[@]}"; then
+  if [[ $FORCE_CLEANUP == "1" ]]; then
+    cleanup
+  else
+    FATAL "Some resources exist";
+  fi
+fi
+
+# Pull images
+forEach "pull" "${PULL_IMAGES[@]}"
+
+# Build docker image used by the client
+# that actually tunnels the traffic.
+INFO "Building docker image for ssh tunnel..."
+IMAGE_SSHTUNNEL=$(docker build -q - <<EOF
+FROM alpine
+RUN apk add autossh
+EOF
+)
+
+# Build nginx proxy docker container.
+INFO "Building docker image for nginx proxy..."
+IMAGE_PROXY=$(docker build -q .)
+
+function traps {
+  cleanup
 }
 
 # set trap
-trap cleanup 0
+trap traps 0
 
 # create network and volume
 docker network create ${NETWORK_NAME}
 docker volume create ${VOLUME_NAME}
 
+RED=$(echo -e '\033[0;31m')
+BLUE=$(echo -e '\033[0;34m')
+GREEN=$(echo -e '\033[0;32m')
+YELLOW=$(echo -e '\033[0;33m')
+PURPLE=$(echo -e '\033[0;35m')
+NC=$(echo -e '\033[0m')
+
+WILDCARD_HOST="*.${CONT_PROXY}"
+REQUEST_HOST="test.${CONT_PROXY}"
+
+echo "Creating proxy container..."
+docker run --rm \
+  --network=${NETWORK_NAME} \
+  --volume="${VOLUME_NAME}:/certs/live/${WILDCARD_HOST}" \
+  -e SERVER="${WILDCARD_HOST}" \
+  -e SUBJECT="${WILDCARD_HOST}" \
+  -e ALTNAME="${REQUEST_HOST}" \
+  --network-alias="${REQUEST_HOST}" \
+  -e TUNNEL_HOST=${CONT_SSHSERVER} \
+  -e TUNNEL_PORT=5000 \
+  --name=${CONT_PROXY} \
+  "${IMAGE_PROXY}" 2>&1 | sed "s/.*/$GREEN&$NC/" &
+
 echo "Generating ssh keys..."
 docker run --rm \
   --volume=${VOLUME_NAME}:/ssh_keys \
-  --name=${SSH_GEN_NAME} \
-  ${OPENSSH_TAG} \
-  ssh-keygen -q -N "" -f /ssh_keys/id_rsa &
+  --name=${CONT_SSHKEYGEN} \
+  "${IMAGE_SSHTUNNEL}" \
+  ssh-keygen -q -N "" -f /ssh_keys/id_rsa
 
 echo "Running ssh server..."
 docker run --rm \
@@ -101,48 +123,52 @@ docker run --rm \
   -e USER_NAME=dev \
   -e DOCKER_MODS=linuxserver/mods:openssh-server-ssh-tunnel \
   -p 5000 \
-  --name=${SSH_SERVER_NAME} \
-  linuxserver/openssh-server &
+  --name=${CONT_SSHSERVER} \
+  linuxserver/openssh-server:9.0_p1-r2-ls94 2>&1 | sed "s/.*/$RED&$NC/" &
 
 echo "Creating destination container..."
 docker run --rm \
   --network=${NETWORK_NAME} \
-  --name=${DEST_NAME} \
-  quay.io/k8start/http-headers:0.1.1 \
+  --name=${CONT_DESTINATION} \
+  quay.io/k8start/http-headers:1.0.0 \
   \
-  --port=9000 &
+  --port=9000 2>&1 | sed "s/.*/$YELLOW&$NC/" &
 
 sleep 5
 echo "Running ssh tunnel..."
 docker run --rm \
   --network=${NETWORK_NAME} \
   --volume=${VOLUME_NAME}:/ssh_keys \
-  --name=${SSH_TUNNEL_NAME} \
-  ${OPENSSH_TAG} \
+  --name=${CONT_SSHTUNNEL} \
+  "${IMAGE_SSHTUNNEL}" \
     autossh -M 0 -N -o StrictHostKeyChecking=no \
     -i /ssh_keys/id_rsa -p 2222 \
-    -R 0.0.0.0:5000:${DEST_NAME}:9000 dev@${SSH_SERVER_NAME} &
-
-sleep 5
-echo "Creating proxy container..."
-docker run --rm \
-  --network=${NETWORK_NAME} \
-  --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
-  -e SERVER=${PROXY_NAME} \
-  -e TUNNEL_HOST=${SSH_SERVER_NAME} \
-  -e TUNNEL_PORT=5000 \
-  --name=${PROXY_NAME} \
-  ${IMAGE_TAG} &
+    -R 0.0.0.0:5000:${CONT_DESTINATION}:9000 dev@${CONT_SSHSERVER} 2>&1 | sed "s/.*/$BLUE&$NC/" &
 
 sleep 10
 echo "Running client waiting to be tunneled..."
-docker run --rm \
+RESULT=$(docker run --rm \
   --network=${NETWORK_NAME} \
-  --volume=${VOLUME_NAME}:/certs/live/${SERVER} \
-  --name=${CLIENT_NAME} \
+  --volume="${VOLUME_NAME}:/certs/live/${WILDCARD_HOST}" \
+  --name=${CONT_CLIENT} \
   curlimages/curl \
   \
-  curl --fail-with-body -v -L ${PROXY_NAME} \
-    --cacert /certs/live/${SERVER}/fullchain.pem
+  curl:7.85.0 --fail-with-body -v -L \
+  -H 'User-Agent:' -H 'Header1: header1' -H 'Header2: header2'\
+  "${REQUEST_HOST}" \
+    --cacert /certs/live/*.${CONT_PROXY}/fullchain.pem)
 
-echo "Looks like it works..."
+WANT="Instance name: example
+Accept: [*/*]
+Connection: [close]
+Header1: [header1]
+Header2: [header2]
+Host: [$REQUEST_HOST]"
+
+printf "===\nResult:\n===\n$RESULT\n"; printf "===\nWant:\n===\n$WANT\n===\n";
+
+if [[ "$RESULT" != "$WANT" ]]; then
+  printf "test failed"; exit 1
+  else
+    echo "test passed"
+fi

@@ -1,27 +1,35 @@
 #!/bin/sh
-set -e
+set -x
 
 if [ -z "$SERVER" ]; then
   echo "\$SERVER is blank";
   exit 1
 fi
 
-envsubst '$TUNNEL_HOST $TUNNEL_PORT $SERVER' < /etc/nginx/nginx.conf.envsubst > /etc/nginx/nginx.conf
-cat /etc/nginx/nginx.conf
-
-
-
-
-ssl_certificate="/certs/live/$SERVER/fullchain.pem"
-ssl_certificate_key="/certs/live/$SERVER/privkey.pem"
-
-if ! [ -f "$ssl_certificate" ] || ! [ -f "$ssl_certificate_key" ]; then
-  echo "Certificates not found, generating dummy certs so nginx can boot up..."
-  mkdir -p tmp-certs12345612345 ; cd tmp-certs12345612345
-  mkdir -p $(dirname "$ssl_certificate")
-  mkdir -p $(dirname "$ssl_certificate_key")
-  openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -subj "/CN=${SERVER}/O=${SERVER}" \
-    -keyout "${ssl_certificate_key}" \
-    -out "${ssl_certificate}"
+if [ -z "$SSL_CERT_PATH" ] || [ -z "$SSL_KEY_PATH" ]; then
+  export SSL_CERT_PATH="/certs/live/$SERVER/fullchain.pem"
+  export SSL_KEY_PATH="/certs/live/$SERVER/privkey.pem"
 fi
+
+if ! [ -f "$SSL_CERT_PATH" ] || ! [ -f "$SSL_KEY_PATH" ]; then
+
+  if [ -z "$SUBJECT" ]; then
+    SUBJECT=$SERVER
+  fi
+
+  if [ -z "$ALTNAME" ]; then
+    ALTNAME=$SERVER
+  fi
+
+  echo "Certificates not found, generating dummy certs so nginx can boot up..."
+  mkdir -p $(dirname "$SSL_CERT_PATH")
+  mkdir -p $(dirname "$SSL_KEY_PATH")
+  openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -subj "/CN=${SUBJECT}/O=${SUBJECT}" \
+    -addext "subjectAltName = DNS:${ALTNAME}, DNS:${SERVER}" \
+    -out "${SSL_CERT_PATH}" \
+    -keyout "${SSL_KEY_PATH}"
+fi
+
+envsubst '$TUNNEL_HOST $TUNNEL_PORT $SERVER $SSL_KEY_PATH $SSL_CERT_PATH' < /etc/nginx/nginx.conf.envsubst > /etc/nginx/nginx.conf
+cat /etc/nginx/nginx.conf
